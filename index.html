@@ -48,6 +48,8 @@
     .hint { font-size: 13px; color: #a33; background: #fff3f3; padding: 8px; border-radius: 6px; margin-top: 10px; display: none; }
     .userbox { font-size: 14px; color: #444; background: #f6f8fa; border-radius: 8px; padding: 10px; }
     .userbox b { color: #111; }
+    .denied-box { font-size: 14px; color: #666; background: #f6f8fa; border-radius: 8px; padding: 12px; margin-top: 10px; }
+    .denied-box b { color: #111; font-size: 15px; }
   </style>
 </head>
 <body>
@@ -60,23 +62,36 @@
       <br><span id="userLine" style="font-size:12px;color:#999;"></span>
     </div>
 
-    <label>巡檢案場</label>
-    <select id="site"></select>
+    <!-- 沒有權限時顯示 -->
+    <div class="card" id="permDenied" style="display:none;margin-top:14px;">
+      <h3 style="color:#d63a3a;">尚未開通權限</h3>
+      <div class="sub">您的帳號尚未被允許使用現場巡檢系統</div>
+      <div class="denied-box">
+        請把下面的 <b>LINE ID</b> 傳給管理者，開通後即可使用：<br>
+        <b id="permLine" style="color:#333;"></b>
+      </div>
+    </div>
 
-    <label>巡檢項目</label>
-    <div id="itemsBox"></div>
+    <!-- 有權限時才顯示表單 -->
+    <div id="formWrap" style="display:none;">
+      <label>巡檢案場</label>
+      <select id="site"></select>
 
-    <label>現場照片（可多張，直接拍照）</label>
-    <div class="photo-grid" id="photoGrid"></div>
-    <div class="photo-add" id="photoAdd" onclick="document.getElementById('fileInput').click()">＋</div>
-    <input type="file" id="fileInput" accept="image/*" capture="environment" multiple style="display:none">
+      <label>巡檢項目</label>
+      <div id="itemsBox"></div>
 
-    <label>缺失說明與指示</label>
-    <textarea id="note" rows="3" placeholder="如有缺失，請詳細說明需要改進的地方…"></textarea>
+      <label>現場照片（可多張，直接拍照）</label>
+      <div class="photo-grid" id="photoGrid"></div>
+      <div class="photo-add" id="photoAdd" onclick="document.getElementById('fileInput').click()">＋</div>
+      <input type="file" id="fileInput" accept="image/*" capture="environment" multiple style="display:none">
 
-    <div id="statusBar"></div>
-    <button class="submit" id="submitBtn" onclick="submitForm()">確認提交巡檢紀錄</button>
-    <div class="hint" id="hint"></div>
+      <label>缺失說明與指示</label>
+      <textarea id="note" rows="3" placeholder="如有缺失，請詳細說明需要改進的地方…"></textarea>
+
+      <div id="statusBar"></div>
+      <button class="submit" id="submitBtn" onclick="submitForm()">確認提交巡檢紀錄</button>
+      <div class="hint" id="hint"></div>
+    </div>
   </div>
 
 <script>
@@ -88,9 +103,10 @@ var CONFIG = {
   liffId: "2012065234-tqTtFxjn",
 
   // ★★★ 填入你部署好的 Google Apps Script 網址（見指南步驟 1）★★★
-  gasUrl: "https://script.google.com/macros/s/AKfycby9f-JRQTyaq26_4U8F6AsJ5n6OFxEDBZLuVaLvGSIm15I4qL-xmdYzIFNGU96dZcMp/exec",
+  gasUrl: "https://script.google.com/macros/s/AKfycbzq5hDxob5QlD2l6NJa7R5Y3aqWik1OK79MeyPR0niKQ5t0G0bM9kn26pAWdwAlT2Yz/exec",
 
-  // ★★★ 案場清單：在這裡增減選項即可 ★★★
+  // ★★★ 案場清單（全部案場）：在這裡增減選項即可 ★★★
+  //    人員權限表若填「全部」，督導會看到這份完整清單
   sites: ["帝王京都", "山盟海誓", "岩美璞丰", "瑞昇全家福", "其他案場"],
 
   // ★★★ 巡檢項目：在這裡增減項目 ★★★
@@ -107,15 +123,23 @@ var CONFIG = {
 /* =========================================================
    以下為程式主體，非工程師請勿修改
    ========================================================= */
-var photos = [];   // 已選照片（壓縮後的 base64）
+var photos = [];       // 已選照片（壓縮後的 base64）
+var currentLineId = ''; // 目前使用者的 LINE ID
 
-/* ---- 建立案場與巡檢項目介面 ---- */
-(function buildForm(){
+/* ---- 建立案場下拉（只放被允許的案場） ---- */
+function buildSites(siteList){
   var siteSel = document.getElementById('site');
-  CONFIG.sites.forEach(function(s){
+  siteSel.innerHTML = '';
+  (siteList || []).forEach(function(s){
+    if (s === '') return;
     var o = document.createElement('option'); o.value = s; o.textContent = s; siteSel.appendChild(o);
   });
+}
+
+/* ---- 建立巡檢項目介面 ---- */
+function buildItems(){
   var box = document.getElementById('itemsBox');
+  box.innerHTML = '';
   CONFIG.items.forEach(function(it, idx){
     var row = document.createElement('div'); row.className = 'item-row';
     var name = document.createElement('div'); name.className = 'item-name'; name.textContent = (idx+1) + '. ' + it.name;
@@ -129,9 +153,41 @@ var photos = [];   // 已選照片（壓縮後的 base64）
     row.appendChild(name); row.appendChild(wrap);
     box.appendChild(row);
   });
-})();
+}
 
-/* ---- LIFF 初始化：自動抓取 LINE 暱稱與 ID ---- */
+/* ---- 權限檢查（用 JSONP，前端能讀到後端回傳） ---- */
+function checkPermission(lineId){
+  return new Promise(function(resolve, reject){
+    var cbName = 'cb' + Date.now() + Math.floor(Math.random() * 1000);
+    window[cbName] = function(res){
+      try { delete window[cbName]; } catch(e){}
+      resolve(res);
+    };
+    var s = document.createElement('script');
+    s.src = CONFIG.gasUrl + '?action=check&lineId=' + encodeURIComponent(lineId) + '&callback=' + cbName;
+    s.onerror = function(){
+      try { delete window[cbName]; } catch(e){}
+      reject(new Error('權限檢查失敗，請確認後端網址正確'));
+    };
+    document.head.appendChild(s);
+    setTimeout(function(){
+      if (window[cbName]) {
+        try { delete window[cbName]; } catch(e){}
+        reject(new Error('權限檢查逾時，請重試'));
+      }
+    }, 12000);
+  });
+}
+
+/* ---- 無權限畫面 ---- */
+function showDenied(){
+  document.getElementById('permLine').textContent = currentLineId || '';
+  document.getElementById('permDenied').style.display = 'block';
+  document.getElementById('formWrap').style.display = 'none';
+  document.getElementById('statusBar').textContent = '';
+}
+
+/* ---- 進場流程：LIFF 初始化 → 抓身分 → 查權限 → 顯示表單或無權限 ---- */
 function initLIFF(){
   var status = document.getElementById('statusBar');
   if (typeof liff === 'undefined') { status.textContent = 'LIFF SDK 載入失敗'; return; }
@@ -144,13 +200,32 @@ function initLIFF(){
       return liff.getProfile().then(function(profile){
         document.getElementById('userName').textContent = profile.displayName;
         document.getElementById('userLine').textContent = 'LINE ID：' + profile.userId;
-        status.textContent = '';
+        currentLineId = profile.userId;
+        status.textContent = '檢查權限中…';
+        return checkPermission(profile.userId);
       });
     })
+    .then(function(perm){
+      if (perm && perm.allowed) {
+        // 被允許：決定可看到哪些案場
+        var allowedSites = (perm.sites === '全部' || !perm.sites || perm.sites.length === 0)
+          ? CONFIG.sites
+          : perm.sites;
+        buildSites(allowedSites);
+        buildItems();
+        document.getElementById('formWrap').style.display = 'block';
+        document.getElementById('statusBar').textContent = '';
+      } else {
+        showDenied();
+      }
+    })
     .catch(function(err){
+      if (currentLineId) { showDenied(); }
       document.getElementById('hint').style.display = 'block';
       document.getElementById('hint').textContent = '無法初始化 LINE：' + err + '（請確認已設定 LIFF ID）';
-      status.textContent = '初始化失敗';
+      if (document.getElementById('formWrap').style.display === 'block') {
+        document.getElementById('statusBar').textContent = '權限檢查失敗，請稍後重試';
+      }
     });
 }
 initLIFF();
