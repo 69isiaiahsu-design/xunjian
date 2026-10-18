@@ -44,16 +44,48 @@
       box-shadow: 0 3px 8px rgba(0,185,0,0.25);
     }
     button.submit:disabled { background: #9ac79a; }
+    button.clock {
+      flex: 1; padding: 14px; color: #fff; border: none; border-radius: 10px;
+      font-size: 16px; font-weight: 700; box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    }
+    button.clock:disabled { opacity: .55; }
     #statusBar { text-align: center; font-size: 14px; color: #666; min-height: 20px; margin-bottom: 8px; }
+    #clockStatus { text-align: center; font-size: 14px; color: #666; min-height: 20px; margin: 8px 0; }
     .hint { font-size: 13px; color: #a33; background: #fff3f3; padding: 8px; border-radius: 6px; margin-top: 10px; display: none; }
     .userbox { font-size: 14px; color: #444; background: #f6f8fa; border-radius: 8px; padding: 10px; }
     .userbox b { color: #111; }
     .denied-box { font-size: 14px; color: #666; background: #f6f8fa; border-radius: 8px; padding: 12px; margin-top: 10px; }
     .denied-box b { color: #111; font-size: 15px; }
+    .clock-row { display: flex; gap: 10px; margin-top: 6px; }
   </style>
 </head>
 <body>
 
+  <!-- ═══════════ 上下班打卡（所有人都可用） ═══════════ -->
+  <div class="card">
+    <h3>上下班打卡</h3>
+    <div class="sub">打卡會自動記錄時間，可選填照片，並自動帶入手機位置</div>
+    <div class="userbox">
+      打卡人員：<b id="clockName">載入中…</b>
+      <br><span id="clockLine" style="font-size:12px;color:#999;"></span>
+    </div>
+
+    <label>打卡案場</label>
+    <select id="clockSite"></select>
+
+    <label>打卡照片（選填，可拍照）</label>
+    <div class="photo-grid" id="clockPhotoGrid"></div>
+    <div class="photo-add" onclick="document.getElementById('clockFileInput').click()">＋</div>
+    <input type="file" id="clockFileInput" accept="image/*" capture="environment" style="display:none">
+
+    <div id="clockStatus"></div>
+    <div class="clock-row">
+      <button class="clock" id="clockInBtn" style="background:#00B900;" onclick="doClock('上班')">上班打卡</button>
+      <button class="clock" id="clockOutBtn" style="background:#E8742C;" onclick="doClock('下班')">下班打卡</button>
+    </div>
+  </div>
+
+  <!-- ═══════════ 現場巡檢（只給開通權限的督導） ═══════════ -->
   <div class="card">
     <h3>現場巡檢與品質稽核</h3>
     <div class="sub">提交後自動寫入後台試算表</div>
@@ -63,8 +95,8 @@
     </div>
 
     <!-- 沒有權限時顯示 -->
-    <div class="card" id="permDenied" style="display:none;margin-top:14px;">
-      <h3 style="color:#d63a3a;">尚未開通權限</h3>
+    <div id="permDenied" style="display:none;margin-top:14px;">
+      <h3 style="color:#d63a3a;">尚未開通巡檢權限</h3>
       <div class="sub">您的帳號尚未被允許使用現場巡檢系統</div>
       <div class="denied-box">
         請把下面的 <b>LINE ID</b> 傳給管理者，開通後即可使用：<br>
@@ -103,10 +135,9 @@ var CONFIG = {
   liffId: "2012065234-tqTtFxjn",
 
   // ★★★ 填入你部署好的 Google Apps Script 網址（見指南步驟 1）★★★
-  gasUrl: "https://script.google.com/macros/s/AKfycbzq5hDxob5QlD2l6NJa7R5Y3aqWik1OK79MeyPR0niKQ5t0G0bM9kn26pAWdwAlT2Yz/exec",
+  gasUrl: "https://script.google.com/macros/s/AKfycbyRBU18jNte4x-tjdOMM6kjSDuQZq_n6L0FN1evt4xCjuXBGw3K97hgVFSpzNeA9i1n/exec",
 
   // ★★★ 案場清單（全部案場）：在這裡增減選項即可 ★★★
-  //    人員權限表若填「全部」，督導會看到這份完整清單
   sites: ["帝王京都", "山盟海誓", "岩美璞丰", "瑞昇全家福", "其他案場"],
 
   // ★★★ 巡檢項目：在這裡增減項目 ★★★
@@ -123,10 +154,20 @@ var CONFIG = {
 /* =========================================================
    以下為程式主體，非工程師請勿修改
    ========================================================= */
-var photos = [];       // 已選照片（壓縮後的 base64）
+var photos = [];        // 巡檢照片（壓縮後的 base64）
+var clockPhotos = [];   // 打卡照片
 var currentLineId = ''; // 目前使用者的 LINE ID
 
-/* ---- 建立案場下拉（只放被允許的案場） ---- */
+/* ---- 打卡案場下拉（所有人都看得到全部案場） ---- */
+function buildClockSite(){
+  var sel = document.getElementById('clockSite');
+  sel.innerHTML = '';
+  CONFIG.sites.forEach(function(s){
+    var o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
+  });
+}
+
+/* ---- 巡檢案場下拉（只放被允許的案場） ---- */
 function buildSites(siteList){
   var siteSel = document.getElementById('site');
   siteSel.innerHTML = '';
@@ -179,7 +220,7 @@ function checkPermission(lineId){
   });
 }
 
-/* ---- 無權限畫面 ---- */
+/* ---- 無巡檢權限畫面 ---- */
 function showDenied(){
   document.getElementById('permLine').textContent = currentLineId || '';
   document.getElementById('permDenied').style.display = 'block';
@@ -187,7 +228,7 @@ function showDenied(){
   document.getElementById('statusBar').textContent = '';
 }
 
-/* ---- 進場流程：LIFF 初始化 → 抓身分 → 查權限 → 顯示表單或無權限 ---- */
+/* ---- 進場流程：LIFF 初始化 → 抓身分 → 打卡即可用 + 查巡檢權限 ---- */
 function initLIFF(){
   var status = document.getElementById('statusBar');
   if (typeof liff === 'undefined') { status.textContent = 'LIFF SDK 載入失敗'; return; }
@@ -198,16 +239,20 @@ function initLIFF(){
         return;
       }
       return liff.getProfile().then(function(profile){
+        currentLineId = profile.userId;
+        // 打卡（所有人都可用）
+        document.getElementById('clockName').textContent = profile.displayName;
+        document.getElementById('clockLine').textContent = 'LINE ID：' + profile.userId;
+        buildClockSite();
+        // 巡檢（查權限）
         document.getElementById('userName').textContent = profile.displayName;
         document.getElementById('userLine').textContent = 'LINE ID：' + profile.userId;
-        currentLineId = profile.userId;
         status.textContent = '檢查權限中…';
         return checkPermission(profile.userId);
       });
     })
     .then(function(perm){
       if (perm && perm.allowed) {
-        // 被允許：決定可看到哪些案場
         var allowedSites = (perm.sites === '全部' || !perm.sites || perm.sites.length === 0)
           ? CONFIG.sites
           : perm.sites;
@@ -230,15 +275,79 @@ function initLIFF(){
 }
 initLIFF();
 
-/* ---- 照片選擇與前端壓縮（避免檔案太大） ---- */
-document.getElementById('fileInput').addEventListener('change', function(e){
+/* =============== 打卡功能 =============== */
+function getLocation(){
+  return new Promise(function(resolve){
+    if (!navigator.geolocation) return resolve('');
+    navigator.geolocation.getCurrentPosition(
+      function(pos){
+        var lat = pos.coords.latitude.toFixed(6);
+        var lng = pos.coords.longitude.toFixed(6);
+        resolve(lat + ',' + lng + ' https://www.google.com/maps?q=' + lat + ',' + lng);
+      },
+      function(){ resolve(''); },   // 使用者拒絕或失敗 → 不帶定位
+      { timeout: 8000, enableHighAccuracy: false }
+    );
+  });
+}
+
+function doClock(type){
+  var btn = type === '上班' ? document.getElementById('clockInBtn') : document.getElementById('clockOutBtn');
+  btn.disabled = true;
+  document.getElementById('clockStatus').textContent = '打卡中…';
+  getLocation().then(function(loc){
+    var payload = {
+      action: 'clock',
+      userName: document.getElementById('clockName').textContent,
+      lineId: liff.getDecodedIDToken() ? liff.getDecodedIDToken().sub : '',
+      site: document.getElementById('clockSite').value,
+      clockType: type,
+      location: loc,
+      photos: clockPhotos
+    };
+    return fetch(CONFIG.gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+  }).then(function(){
+    document.getElementById('clockStatus').textContent = '打卡成功！';
+    alert(type + '打卡成功！');
+    clockPhotos = [];
+    renderClockPhotos();
+    try { if (liff.isInClient()) liff.closeWindow(); } catch(e){}
+  }).catch(function(err){
+    document.getElementById('clockStatus').textContent = '打卡失敗，請重試';
+    alert('打卡失敗：' + err);
+    btn.disabled = false;
+  });
+}
+
+/* ---- 打卡照片（選填） ---- */
+document.getElementById('clockFileInput').addEventListener('change', function(e){
   var files = Array.prototype.slice.call(e.target.files || []);
-  files.forEach(compressAndAdd);
+  files.forEach(function(f){
+    if (clockPhotos.length >= 3) { alert('最多 3 張照片'); return; }
+    compressImage(f, function(base64){ clockPhotos.push({ name: f.name, data: base64 }); renderClockPhotos(); });
+  });
   this.value = '';
 });
 
-function compressAndAdd(file){
-  if (photos.length >= 6) { alert('最多 6 張照片'); return; }
+function renderClockPhotos(){
+  var grid = document.getElementById('clockPhotoGrid');
+  grid.innerHTML = '';
+  clockPhotos.forEach(function(p, i){
+    var img = document.createElement('img');
+    img.className = 'photo-thumb';
+    img.src = 'data:image/jpeg;base64,' + p.data;
+    img.onclick = function(){ if(confirm('刪除這張照片？')) { clockPhotos.splice(i,1); renderClockPhotos(); } };
+    grid.appendChild(img);
+  });
+}
+
+/* ---- 共用：圖片壓縮 ---- */
+function compressImage(file, done){
   var reader = new FileReader();
   reader.onload = function(ev){
     var img = new Image();
@@ -251,13 +360,22 @@ function compressAndAdd(file){
       var ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       var base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
-      photos.push({ name: file.name, data: base64 });
-      renderPhotos();
+      done(base64);
     };
     img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 }
+
+/* =============== 巡檢照片與送出（原本功能） =============== */
+document.getElementById('fileInput').addEventListener('change', function(e){
+  var files = Array.prototype.slice.call(e.target.files || []);
+  files.forEach(function(f){
+    if (photos.length >= 6) { alert('最多 6 張照片'); return; }
+    compressImage(f, function(base64){ photos.push({ name: f.name, data: base64 }); renderPhotos(); });
+  });
+  this.value = '';
+});
 
 function renderPhotos(){
   var grid = document.getElementById('photoGrid');
@@ -271,7 +389,6 @@ function renderPhotos(){
   });
 }
 
-/* ---- 送出表單 ---- */
 function submitForm(){
   if (!CONFIG.liffId || CONFIG.liffId === 'YOUR_LIFF_ID_HERE') {
     document.getElementById('hint').style.display = 'block';
