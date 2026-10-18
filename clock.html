@@ -68,6 +68,7 @@ var CONFIG = {
    以下為程式主體，非工程師請勿修改
    ========================================================= */
 var clockPhotos = [];
+var currentLineId = '';
 
 function buildClockSite(){
   var sel = document.getElementById('clockSite');
@@ -100,7 +101,7 @@ function doClock(type){
     var payload = {
       action: 'clock',
       userName: document.getElementById('clockName').textContent,
-      lineId: liff.getDecodedIDToken() ? liff.getDecodedIDToken().sub : '',
+      lineId: currentLineId || '',
       site: document.getElementById('clockSite').value,
       clockType: type,
       location: loc,
@@ -172,6 +173,7 @@ function initLIFF(){
     .then(function(){
       if (!liff.isLoggedIn()) { liff.login(); return; }
       return liff.getProfile().then(function(profile){
+        currentLineId = profile.userId;
         document.getElementById('clockName').textContent = profile.displayName;
         document.getElementById('clockLine').textContent = 'LINE ID：' + profile.userId;
         buildClockSite();

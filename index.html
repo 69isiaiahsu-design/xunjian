@@ -271,7 +271,7 @@ function submitForm(){
 
   var payload = {
     userName: document.getElementById('userName').textContent,
-    lineId: liff.getDecodedIDToken() ? liff.getDecodedIDToken().sub : '',
+    lineId: currentLineId || '',
     site: document.getElementById('site').value,
     items: items,
     note: document.getElementById('note').value,
