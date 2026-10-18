@@ -88,7 +88,7 @@ var CONFIG = {
   liffId: "2012065234-tqTtFxjn",
 
   // ★★★ 填入你部署好的 Google Apps Script 網址（見指南步驟 1）★★★
-  gasUrl: "https://script.google.com/macros/s/AKfycbyRBU18jNte4x-tjdOMM6kjSDuQZq_n6L0FN1evt4xCjuXBGw3K97hgVFSpzNeA9i1n/exec",
+  gasUrl: "https://script.google.com/macros/s/AKfycbx5jxI3RSeJZ3kIq1TpQj67IZs6IWIWyX9N4QgsSk7a-cwpSffgZ7clCYUZHcQ5oILu/exec",
 
   // ★★★ 案場清單（全部案場）：在這裡增減選項即可 ★★★
   sites: ["帝王京都", "山盟海誓", "岩美璞丰", "瑞昇全家福", "其他案場"],
@@ -252,6 +252,21 @@ function compressImage(file, done){
   reader.readAsDataURL(file);
 }
 
+function getLocation(){
+  return new Promise(function(resolve){
+    if (!navigator.geolocation) return resolve('');
+    navigator.geolocation.getCurrentPosition(
+      function(pos){
+        var lat = pos.coords.latitude.toFixed(6);
+        var lng = pos.coords.longitude.toFixed(6);
+        resolve('https://www.google.com/maps?q=' + lat + ',' + lng);
+      },
+      function(){ resolve(''); },
+      { timeout: 8000, enableHighAccuracy: false }
+    );
+  });
+}
+
 function submitForm(){
   if (!CONFIG.liffId || CONFIG.liffId === 'YOUR_LIFF_ID_HERE') {
     document.getElementById('hint').style.display = 'block';
@@ -269,24 +284,26 @@ function submitForm(){
     items.push({ name: it.name, status: sel.value });
   });
 
-  var payload = {
-    userName: document.getElementById('userName').textContent,
-    lineId: currentLineId || '',
-    site: document.getElementById('site').value,
-    items: items,
-    note: document.getElementById('note').value,
-    photos: photos
-  };
-
   var btn = document.getElementById('submitBtn');
   btn.disabled = true;
   document.getElementById('statusBar').textContent = '提交中，請稍候…';
 
-  fetch(CONFIG.gasUrl, {
-    method: 'POST',
-    mode: 'no-cors',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
+  getLocation().then(function(loc){
+    var payload = {
+      userName: document.getElementById('userName').textContent,
+      lineId: currentLineId || '',
+      site: document.getElementById('site').value,
+      items: items,
+      note: document.getElementById('note').value,
+      photos: photos,
+      location: loc
+    };
+    return fetch(CONFIG.gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
   }).then(function(){
     document.getElementById('statusBar').textContent = '提交成功！';
     alert('巡檢紀錄已送出，感謝您！');

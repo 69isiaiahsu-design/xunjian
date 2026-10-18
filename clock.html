@@ -58,7 +58,7 @@ var CONFIG = {
   liffId: "2012065234-Iul6aDux",
 
   // ★★★ 後端網址（含打卡功能）★★★
-  gasUrl: "https://script.google.com/macros/s/AKfycbyRBU18jNte4x-tjdOMM6kjSDuQZq_n6L0FN1evt4xCjuXBGw3K97hgVFSpzNeA9i1n/exec",
+  gasUrl: "https://script.google.com/macros/s/AKfycbx5jxI3RSeJZ3kIq1TpQj67IZs6IWIWyX9N4QgsSk7a-cwpSffgZ7clCYUZHcQ5oILu/exec",
 
   // ★★★ 案場清單：在這裡增減選項即可 ★★★
   sites: ["帝王京都", "山盟海誓", "岩美璞丰", "瑞昇全家福", "其他案場"]
@@ -85,7 +85,7 @@ function getLocation(){
       function(pos){
         var lat = pos.coords.latitude.toFixed(6);
         var lng = pos.coords.longitude.toFixed(6);
-        resolve(lat + ',' + lng + ' https://www.google.com/maps?q=' + lat + ',' + lng);
+        resolve('https://www.google.com/maps?q=' + lat + ',' + lng);
       },
       function(){ resolve(''); },
       { timeout: 8000, enableHighAccuracy: false }
