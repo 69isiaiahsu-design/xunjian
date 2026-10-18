@@ -11,17 +11,11 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif;
       margin: 0; padding: 12px; background: #f0f2f5; color: #222;
     }
-    .card {
-      background: #fff; padding: 18px; border-radius: 14px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 14px;
-    }
+    .card { background: #fff; padding: 18px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
     h3 { margin: 0 0 4px; font-size: 20px; }
     .sub { color: #777; font-size: 13px; margin-bottom: 12px; }
     label { font-weight: 600; display: block; margin: 14px 0 6px; font-size: 15px; }
-    input, select, textarea {
-      width: 100%; padding: 11px; border: 1px solid #d0d0d0; border-radius: 8px;
-      font-size: 16px; background: #fff; color: #222;
-    }
+    input, select, textarea { width: 100%; padding: 11px; border: 1px solid #d0d0d0; border-radius: 8px; font-size: 16px; background: #fff; color: #222; }
     select { appearance: none; }
     textarea { resize: vertical; }
     .item-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 10px 0; }
@@ -33,59 +27,18 @@
     .status-BAD  { border-color: #d63a3a; }
     .photo-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .photo-thumb { width: 82px; height: 82px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
-    .photo-add {
-      width: 82px; height: 82px; border: 2px dashed #bbb; border-radius: 8px;
-      display: flex; align-items: center; justify-content: center;
-      color: #888; font-size: 30px; cursor: pointer; background: #fafafa;
-    }
-    button.submit {
-      width: 100%; padding: 15px; background: #00B900; color: #fff; border: none;
-      border-radius: 10px; font-size: 18px; font-weight: 700; margin: 6px 0 10px;
-      box-shadow: 0 3px 8px rgba(0,185,0,0.25);
-    }
+    .photo-add { width: 82px; height: 82px; border: 2px dashed #bbb; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #888; font-size: 30px; cursor: pointer; background: #fafafa; }
+    button.submit { width: 100%; padding: 15px; background: #00B900; color: #fff; border: none; border-radius: 10px; font-size: 18px; font-weight: 700; margin: 6px 0 10px; box-shadow: 0 3px 8px rgba(0,185,0,0.25); }
     button.submit:disabled { background: #9ac79a; }
-    button.clock {
-      flex: 1; padding: 14px; color: #fff; border: none; border-radius: 10px;
-      font-size: 16px; font-weight: 700; box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-    }
-    button.clock:disabled { opacity: .55; }
     #statusBar { text-align: center; font-size: 14px; color: #666; min-height: 20px; margin-bottom: 8px; }
-    #clockStatus { text-align: center; font-size: 14px; color: #666; min-height: 20px; margin: 8px 0; }
     .hint { font-size: 13px; color: #a33; background: #fff3f3; padding: 8px; border-radius: 6px; margin-top: 10px; display: none; }
     .userbox { font-size: 14px; color: #444; background: #f6f8fa; border-radius: 8px; padding: 10px; }
     .userbox b { color: #111; }
     .denied-box { font-size: 14px; color: #666; background: #f6f8fa; border-radius: 8px; padding: 12px; margin-top: 10px; }
     .denied-box b { color: #111; font-size: 15px; }
-    .clock-row { display: flex; gap: 10px; margin-top: 6px; }
   </style>
 </head>
 <body>
-
-  <!-- ═══════════ 上下班打卡（所有人都可用） ═══════════ -->
-  <div class="card">
-    <h3>上下班打卡</h3>
-    <div class="sub">打卡會自動記錄時間，可選填照片，並自動帶入手機位置</div>
-    <div class="userbox">
-      打卡人員：<b id="clockName">載入中…</b>
-      <br><span id="clockLine" style="font-size:12px;color:#999;"></span>
-    </div>
-
-    <label>打卡案場</label>
-    <select id="clockSite"></select>
-
-    <label>打卡照片（選填，可拍照）</label>
-    <div class="photo-grid" id="clockPhotoGrid"></div>
-    <div class="photo-add" onclick="document.getElementById('clockFileInput').click()">＋</div>
-    <input type="file" id="clockFileInput" accept="image/*" capture="environment" style="display:none">
-
-    <div id="clockStatus"></div>
-    <div class="clock-row">
-      <button class="clock" id="clockInBtn" style="background:#00B900;" onclick="doClock('上班')">上班打卡</button>
-      <button class="clock" id="clockOutBtn" style="background:#E8742C;" onclick="doClock('下班')">下班打卡</button>
-    </div>
-  </div>
-
-  <!-- ═══════════ 現場巡檢（只給開通權限的督導） ═══════════ -->
   <div class="card">
     <h3>現場巡檢與品質稽核</h3>
     <div class="sub">提交後自動寫入後台試算表</div>
@@ -154,18 +107,8 @@ var CONFIG = {
 /* =========================================================
    以下為程式主體，非工程師請勿修改
    ========================================================= */
-var photos = [];        // 巡檢照片（壓縮後的 base64）
-var clockPhotos = [];   // 打卡照片
-var currentLineId = ''; // 目前使用者的 LINE ID
-
-/* ---- 打卡案場下拉（所有人都看得到全部案場） ---- */
-function buildClockSite(){
-  var sel = document.getElementById('clockSite');
-  sel.innerHTML = '';
-  CONFIG.sites.forEach(function(s){
-    var o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
-  });
-}
+var photos = [];
+var currentLineId = '';
 
 /* ---- 巡檢案場下拉（只放被允許的案場） ---- */
 function buildSites(siteList){
@@ -228,23 +171,15 @@ function showDenied(){
   document.getElementById('statusBar').textContent = '';
 }
 
-/* ---- 進場流程：LIFF 初始化 → 抓身分 → 打卡即可用 + 查巡檢權限 ---- */
+/* ---- 進場流程：LIFF 初始化 → 抓身分 → 查巡檢權限 ---- */
 function initLIFF(){
   var status = document.getElementById('statusBar');
   if (typeof liff === 'undefined') { status.textContent = 'LIFF SDK 載入失敗'; return; }
   liff.init({ liffId: CONFIG.liffId })
     .then(function(){
-      if (!liff.isLoggedIn()) {
-        liff.login();   // 第一次使用會自動要求授權
-        return;
-      }
+      if (!liff.isLoggedIn()) { liff.login(); return; }
       return liff.getProfile().then(function(profile){
         currentLineId = profile.userId;
-        // 打卡（所有人都可用）
-        document.getElementById('clockName').textContent = profile.displayName;
-        document.getElementById('clockLine').textContent = 'LINE ID：' + profile.userId;
-        buildClockSite();
-        // 巡檢（查權限）
         document.getElementById('userName').textContent = profile.displayName;
         document.getElementById('userLine').textContent = 'LINE ID：' + profile.userId;
         status.textContent = '檢查權限中…';
@@ -275,99 +210,7 @@ function initLIFF(){
 }
 initLIFF();
 
-/* =============== 打卡功能 =============== */
-function getLocation(){
-  return new Promise(function(resolve){
-    if (!navigator.geolocation) return resolve('');
-    navigator.geolocation.getCurrentPosition(
-      function(pos){
-        var lat = pos.coords.latitude.toFixed(6);
-        var lng = pos.coords.longitude.toFixed(6);
-        resolve(lat + ',' + lng + ' https://www.google.com/maps?q=' + lat + ',' + lng);
-      },
-      function(){ resolve(''); },   // 使用者拒絕或失敗 → 不帶定位
-      { timeout: 8000, enableHighAccuracy: false }
-    );
-  });
-}
-
-function doClock(type){
-  var btn = type === '上班' ? document.getElementById('clockInBtn') : document.getElementById('clockOutBtn');
-  btn.disabled = true;
-  document.getElementById('clockStatus').textContent = '打卡中…';
-  getLocation().then(function(loc){
-    var payload = {
-      action: 'clock',
-      userName: document.getElementById('clockName').textContent,
-      lineId: liff.getDecodedIDToken() ? liff.getDecodedIDToken().sub : '',
-      site: document.getElementById('clockSite').value,
-      clockType: type,
-      location: loc,
-      photos: clockPhotos
-    };
-    return fetch(CONFIG.gasUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-  }).then(function(){
-    document.getElementById('clockStatus').textContent = '打卡成功！';
-    alert(type + '打卡成功！');
-    clockPhotos = [];
-    renderClockPhotos();
-    try { if (liff.isInClient()) liff.closeWindow(); } catch(e){}
-  }).catch(function(err){
-    document.getElementById('clockStatus').textContent = '打卡失敗，請重試';
-    alert('打卡失敗：' + err);
-    btn.disabled = false;
-  });
-}
-
-/* ---- 打卡照片（選填） ---- */
-document.getElementById('clockFileInput').addEventListener('change', function(e){
-  var files = Array.prototype.slice.call(e.target.files || []);
-  files.forEach(function(f){
-    if (clockPhotos.length >= 3) { alert('最多 3 張照片'); return; }
-    compressImage(f, function(base64){ clockPhotos.push({ name: f.name, data: base64 }); renderClockPhotos(); });
-  });
-  this.value = '';
-});
-
-function renderClockPhotos(){
-  var grid = document.getElementById('clockPhotoGrid');
-  grid.innerHTML = '';
-  clockPhotos.forEach(function(p, i){
-    var img = document.createElement('img');
-    img.className = 'photo-thumb';
-    img.src = 'data:image/jpeg;base64,' + p.data;
-    img.onclick = function(){ if(confirm('刪除這張照片？')) { clockPhotos.splice(i,1); renderClockPhotos(); } };
-    grid.appendChild(img);
-  });
-}
-
-/* ---- 共用：圖片壓縮 ---- */
-function compressImage(file, done){
-  var reader = new FileReader();
-  reader.onload = function(ev){
-    var img = new Image();
-    img.onload = function(){
-      var maxW = 1280;
-      var scale = img.width > maxW ? maxW / img.width : 1;
-      var canvas = document.createElement('canvas');
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      var ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      var base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
-      done(base64);
-    };
-    img.src = ev.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-
-/* =============== 巡檢照片與送出（原本功能） =============== */
+/* =============== 巡檢照片與送出 =============== */
 document.getElementById('fileInput').addEventListener('change', function(e){
   var files = Array.prototype.slice.call(e.target.files || []);
   files.forEach(function(f){
@@ -387,6 +230,26 @@ function renderPhotos(){
     img.onclick = function(){ if(confirm('刪除這張照片？')) { photos.splice(i,1); renderPhotos(); } };
     grid.appendChild(img);
   });
+}
+
+function compressImage(file, done){
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    var img = new Image();
+    img.onload = function(){
+      var maxW = 1280;
+      var scale = img.width > maxW ? maxW / img.width : 1;
+      var canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      var base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+      done(base64);
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 function submitForm(){
