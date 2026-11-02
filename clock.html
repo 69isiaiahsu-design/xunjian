@@ -70,11 +70,36 @@ var CONFIG = {
 var clockPhotos = [];
 var currentLineId = '';
 
-function buildClockSite(){
+function buildClockSite(siteList){
   var sel = document.getElementById('clockSite');
   sel.innerHTML = '';
-  CONFIG.sites.forEach(function(s){
+  (siteList || []).forEach(function(s){
+    if (s === '') return;
     var o = document.createElement('option'); o.value = s; o.textContent = s; sel.appendChild(o);
+  });
+}
+
+/* ---- 權限檢查（用 JSONP，查「人員權限」表） ---- */
+function checkPermission(lineId){
+  return new Promise(function(resolve, reject){
+    var cbName = 'cb' + Date.now() + Math.floor(Math.random() * 1000);
+    window[cbName] = function(res){
+      try { delete window[cbName]; } catch(e){}
+      resolve(res);
+    };
+    var s = document.createElement('script');
+    s.src = CONFIG.gasUrl + '?action=check&lineId=' + encodeURIComponent(lineId) + '&callback=' + cbName;
+    s.onerror = function(){
+      try { delete window[cbName]; } catch(e){}
+      reject(new Error('權限檢查失敗，請確認後端網址正確'));
+    };
+    document.head.appendChild(s);
+    setTimeout(function(){
+      if (window[cbName]) {
+        try { delete window[cbName]; } catch(e){}
+        reject(new Error('權限檢查逾時，請重試'));
+      }
+    }, 12000);
   });
 }
 
@@ -176,8 +201,29 @@ function initLIFF(){
         currentLineId = profile.userId;
         document.getElementById('clockName').textContent = profile.displayName;
         document.getElementById('clockLine').textContent = 'LINE ID：' + profile.userId;
-        buildClockSite();
+        document.getElementById('clockStatus').textContent = '檢查案場權限中…';
+        return checkPermission(profile.userId);
       });
+    })
+    .then(function(perm){
+      if (perm && perm.allowed) {
+        // 只顯示此員工被指派的案場；若權限表填「全部」或未填案場 → 顯示全部案場
+        var allowedSites = (perm.sites === '全部' || !perm.sites || perm.sites.length === 0)
+          ? CONFIG.sites
+          : perm.sites;
+        buildClockSite(allowedSites);
+        document.getElementById('clockStatus').textContent = '';
+      } else {
+        // 無權限：不能打卡，請管理者開通
+        var sel = document.getElementById('clockSite');
+        sel.innerHTML = '';
+        var o = document.createElement('option');
+        o.textContent = '（未設定案場，請通知管理者）';
+        sel.appendChild(o);
+        document.getElementById('clockInBtn').disabled = true;
+        document.getElementById('clockOutBtn').disabled = true;
+        document.getElementById('clockStatus').textContent = '此帳號未設定打卡案場，請通知管理者開通';
+      }
     })
     .catch(function(err){
       document.getElementById('clockStatus').textContent = '無法初始化 LINE：' + err + '（請確認已設定 LIFF ID）';
